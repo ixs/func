@@ -242,7 +242,7 @@ class Overlord(object):
 
     def __init__(self, server_spec, port=DEFAULT_PORT, interactive=False,
         verbose=False, noglobs=False, nforks=1, config=None, async=False, init_ssl=True,
-        delegate=False, mapfile=DEFAULT_MAPLOC, timeout=None,exclude_spec=None):
+        delegate=False, mapfile=DEFAULT_MAPLOC, timeout=None, exclude_spec=None):
         """
         Constructor.
         @server_spec -- something like "*.example.org" or "foosball"
@@ -502,7 +502,7 @@ class Overlord(object):
         
     # -----------------------------------------------
 
-    def run(self, module, method, args, nforks=1):
+    def run(self, module, method, args, nforks=1, timeout=self.timeout):
         """
         Invoke a remote method on one or more servers.
         Run returns a hash, the keys are server names, the values are the
@@ -520,7 +520,7 @@ class Overlord(object):
                 raise AttributeError("No such local method: %s" % method)
 
         if not self.delegate: #delegation is turned off, so run normally
-            minion_result = self.run_direct(module, method, args, nforks)
+            minion_result = self.run_direct(module, method, args, nforks, timeout)
             if self.overlord_query.fact_query:
                 return self.overlord_query.display_active(minion_result)
             else:
@@ -541,6 +541,7 @@ class Overlord(object):
                                               method,
                                               args,
                                               nforks,
+                                              timeout,
                                               call_path=grouped_paths[group],
                                               suboverlord=group))
         
@@ -548,7 +549,7 @@ class Overlord(object):
         #Why do we do this after delegation calls?  Imagine what happens when
         #reboot is called...
         if len(self.minions) > 0:
-            directhash.update(self.run_direct(module,method,args,nforks))
+            directhash.update(self.run_direct(module,method,args,nforks,timeout))
         
         #poll async results if we've async turned on
         if self.async:
@@ -595,7 +596,7 @@ class Overlord(object):
         
     # -----------------------------------------------
 
-    def run_direct(self, module, method, args, nforks=1, *extraargs, **kwargs):
+    def run_direct(self, module, method, args, nforks=1, timeout=self.timeout, *extraargs, **kwargs):
         """
         Invoke a remote method on one or more servers.
         Run returns a hash, the keys are server names, the values are the
@@ -615,7 +616,7 @@ class Overlord(object):
         
         def process_server(bucketnumber, buckets, server):
             
-            conn = sslclient.FuncServer(server, self.key, self.cert, self.ca, self.timeout)
+            conn = sslclient.FuncServer(server, self.key, self.cert, self.ca, timeout)
             # conn = xmlrpclib.ServerProxy(server)
 
             if self.interactive:
@@ -647,7 +648,8 @@ class Overlord(object):
                                                  args,
                                                  delegation_path,
                                                  self.async,
-                                                 self.nforks)
+                                                 self.nforks,
+                                                 timeout)
                 else:
                     retval = getattr(conn, meth)(*args[:])
 
